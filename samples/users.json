@@ -1,0 +1,37 @@
+{
+    "users": [
+        {
+            "id": 1,
+            "username": "admin",
+            "email": "admin@example.com",
+            "roles": [
+                "admin",
+                "user"
+            ],
+            "active": true
+        },
+        {
+            "id": 2,
+            "username": "john_doe",
+            "email": "john@example.com",
+            "roles": [
+                "user"
+            ],
+            "active": true
+        },
+        {
+            "id": 3,
+            "username": "jane_smith",
+            "email": "jane@example.com",
+            "roles": [
+                "moderator",
+                "user"
+            ],
+            "active": false
+        }
+    ],
+    "metadata": {
+        "total": 3,
+        "active": 2
+    }
+}
