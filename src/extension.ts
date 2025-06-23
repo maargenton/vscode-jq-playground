@@ -220,7 +220,7 @@ class JqPreviewSession {
             <style>
                 body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background-color: var(--vscode-editor-background); padding: 16px; }
                 .info-block { background: var(--vscode-textBlockQuote-background); border-left: 4px solid var(--vscode-textBlockQuote-border); padding: 12px; margin-bottom: 16px; }
-                .info-label { font-weight: 500; margin-right: 0.5em; }
+                .info-label { font-weight: 500; margin-right: 0.5em; white-space: nowrap; }
                 .jq-input-row { display: flex; align-items: center; margin-bottom: 2px; }
                 .jq-input-file { margin-right: 0.5em; }
                 .jq-input-choose { background: none; border: none; color: var(--vscode-button-foreground); font-size: 1em; cursor: pointer; margin-left: 0.2em; padding: 0 4px; border-radius: 3px; }
@@ -385,7 +385,7 @@ function renderOptionSelection(options: string[]): string {
     return `
             <div class="jq-options-block">
                 <div class="jq-options-row-flex">
-                    <span class="jq-options-label">Filter&nbsp;Options:</span>
+                    <span class="jq-options-label">Filter Options:</span>
                     <span class="jq-chips-row-flex" id="jq-chips-row">${chipsHtml}<button id="jq-dropdown-btn" class="jq-dropdown-btn" title="Edit options">&#x25BC;</button></span>
                 </div>
                 <div id="jq-dropdown-list" class="jq-dropdown-list" style="display:none;">
