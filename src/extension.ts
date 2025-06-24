@@ -199,7 +199,10 @@ class JqPreviewSession {
         if (!this.inputFile) {
             return '<p style="color: orange;">No input file selected.</p>';
         }
-        let inputFileDisplay = getWorkspaceRelativePath(this.inputFile);
+        const inputUri = vscode.Uri.file(this.inputFile);
+        const { name, description } = filenameDisplay(inputUri);
+        let inputFileDisplay = `<span class="jq-input-name">${escapeHtml(name)}</span><span class="jq-input-desc"> ${escapeHtml(description)}</span>`;
+
         const optionsHtml = renderOptionSelection(this.options);
         let previewContent = `
             <div class="json-file">
@@ -223,6 +226,8 @@ class JqPreviewSession {
                 .info-label { font-weight: 500; margin-right: 0.5em; white-space: nowrap; }
                 .jq-input-row { display: flex; align-items: center; margin-bottom: 2px; }
                 .jq-input-file { margin-right: 0.5em; }
+                .jq-input-name { font-size: 1em; }
+                .jq-input-desc { font-size: 0.9em; opacity: 0.7; margin-left: 0.3em; }
                 .jq-input-choose { background: none; border: none; color: var(--vscode-button-foreground); font-size: 1em; cursor: pointer; margin-left: 0.2em; padding: 0 4px; border-radius: 3px; }
                 .jq-input-choose:hover { background: var(--vscode-button-hoverBackground); }
                 .jq-options-block { margin-top: 4px; }
@@ -254,7 +259,7 @@ class JqPreviewSession {
                 <div class="jq-activity-bar"></div>
             </div>
             <div class="info-block">
-                <div class="jq-input-row"><span class="info-label">Input File:</span><span class="jq-input-file">${escapeHtml(inputFileDisplay)}</span><button class="jq-input-choose" id="jq-input-choose" title="Change input file">&#8230;</button></div>
+                <div class="jq-input-row"><span class="info-label">Input File:</span><span class="jq-input-file">${inputFileDisplay}</span><button class="jq-input-choose" id="jq-input-choose" title="Change input file">&#8230;</button></div>
                 ${optionsHtml}
             </div>
             ${previewContent}
@@ -357,16 +362,45 @@ class JqPreviewSession {
     }
 }
 
-async function pickInputFile(): Promise<string | undefined> {
-    const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**', 100);
-    if (files.length === 0) {
-        vscode.window.showErrorMessage('No files found in workspace.');
-        return undefined;
+function filenameDisplay(uri: vscode.Uri): { name: string, description: string } {
+    const name = path.basename(uri.fsPath);
+    const wsFolders = vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) || [];
+    const wsFolder = wsFolders.find(ws => uri.fsPath.startsWith(ws + path.sep));
+    let description = '';
+    if (wsFolder) {
+        const rel = path.relative(wsFolder, uri.fsPath);
+        const dir = path.dirname(rel);
+        description = dir === '.' ? '' : dir;
+    } else {
+        description = path.dirname(uri.fsPath);
     }
-    const picked = await vscode.window.showQuickPick(files.map(f => ({ label: path.basename(f.fsPath), description: f.fsPath })), {
-        placeHolder: 'Select a file to use as input for this jq filter',
+    return { name, description };
+}
+
+async function pickInputFile(): Promise<string | undefined> {
+    const openDocs = vscode.workspace.textDocuments
+        .filter(doc => !doc.isUntitled && doc.uri.scheme === 'file')
+        .map(doc => doc.uri);
+    const workspaceFiles =
+        await vscode.workspace.findFiles('**/*', '**/node_modules/**', 1000);
+    const allUris = [...openDocs, ...workspaceFiles].filter((uri, idx, arr) =>
+        arr.findIndex(u => u.fsPath === uri.fsPath) === idx
+    );
+
+    const items = allUris.map(uri => {
+        const { name, description } = filenameDisplay(uri);
+        return {
+            label: name,
+            description,
+            uri
+        };
     });
-    return picked?.description;
+
+    const picked = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Select a file to use as input for this jq filter',
+        matchOnDescription: true
+    });
+    return picked?.uri.fsPath;
 }
 
 function renderOptionSelection(options: string[]): string {
