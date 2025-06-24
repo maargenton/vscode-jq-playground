@@ -41,6 +41,8 @@ export function activate(context: vscode.ExtensionContext) {
     }));
 }
 
+export function deactivate() { }
+
 class JqPreviewSession {
     private disposables: vscode.Disposable[] = [];
     private needUpdate = false;
@@ -202,14 +204,24 @@ class JqPreviewSession {
         const inputUri = vscode.Uri.file(this.inputFile);
         const { name, description } = filenameDisplay(inputUri);
         let inputFileDisplay = `<span class="jq-input-name">${escapeHtml(name)}</span><span class="jq-input-desc"> ${escapeHtml(description)}</span>`;
-
         const optionsHtml = renderOptionSelection(this.options);
+        const isRaw = this.options.includes('-r');
+        let highlightedContent = '';
+        if (!isRaw && this.previewState.type === PreviewType.Result) {
+            highlightedContent = `<pre class="jq-json-output">${highlightJson(this.previewState.content)}</pre>`;
+        } else {
+            highlightedContent = `<pre>${escapeHtml(this.previewState.content)}</pre>`;
+        }
+
         let previewContent = `
             <div class="json-file">
-                <div class="json-file-header">${escapeHtml(path.basename(this.inputFile))}</div>
+                <div class="json-file-header">
+                    <div class="jq-input-row"><span class="info-label">Input File:</span><span class="jq-input-file">${inputFileDisplay}</span><button class="jq-input-choose" id="jq-input-choose" title="Change input file">&#8230;</button></div>
+                    ${optionsHtml}
+                </div>
                 <div class="json-content">
                     <div class="${this.previewState.type}">
-                        <pre>${escapeHtml(this.previewState.content)}</pre>
+                        ${highlightedContent}
                     </div>
                 </div>
             </div>
@@ -221,8 +233,11 @@ class JqPreviewSession {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>jq Preview</title>
             <style>
-                body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background-color: var(--vscode-editor-background); padding: 16px; }
-                .info-block { background: var(--vscode-textBlockQuote-background); border-left: 4px solid var(--vscode-textBlockQuote-border); padding: 12px; margin-bottom: 16px; }
+                body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); padding: 8px; }
+                .jq-activity-indicator { display: none; position: fixed; left: 0; right: 0; top: 0; height: 2px; z-index: 1000; }
+                .jq-activity-indicator.active { display: block; }
+                .jq-activity-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #1565c0 0%, #42a5f5 30%, #b3e5fc 50%, #42a5f5 70%, #1565c0 100%); background-size: 200% 100%; animation: jq-activity-bounce 2s ease-in-out infinite alternate; }
+                @keyframes jq-activity-bounce { 0% { background-position: 0% 0; } 100% { background-position: 100% 0; } }
                 .info-label { font-weight: 500; margin-right: 0.5em; white-space: nowrap; }
                 .jq-input-row { display: flex; align-items: center; margin-bottom: 2px; }
                 .jq-input-file { margin-right: 0.5em; }
@@ -242,25 +257,23 @@ class JqPreviewSession {
                 .jq-dropdown-item { padding: 6px 12px; cursor: pointer; }
                 .jq-dropdown-item.selected, .jq-dropdown-item:hover { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
                 .json-file { margin-bottom: 24px; border: 1px solid var(--vscode-panel-border); border-radius: 4px; overflow: hidden; }
-                .json-file-header { background-color: var(--vscode-editorGroupHeader-tabsBackground); padding: 8px 12px; font-weight: bold; border-bottom: 1px solid var(--vscode-panel-border); }
+                .json-file-header { background-color: var(--vscode-editorGroupHeader-tabsBackground); padding: 8px 12px; font-weight: normal; border-bottom: 1px solid var(--vscode-panel-border); }
                 .json-content { padding: 12px; }
                 .error { color: var(--vscode-errorForeground); background-color: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); padding: 8px; border-radius: 4px; margin: 8px 0; }
                 .placeholder { color: var(--vscode-descriptionForeground); background: none; border: none; padding: 8px; border-radius: 4px; margin: 8px 0; font-style: italic; }
-                .result { background-color: var(--vscode-editor-background); border: 1px solid var(--vscode-input-border); padding: 12px; border-radius: 4px; overflow-x: auto; }
+                .result { border: 1px solid var(--vscode-input-border); border-radius: 4px; overflow-x: auto; }
                 pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
-                .jq-activity-indicator { display: none; position: fixed; left: 0; right: 0; top: 0; height: 2px; z-index: 1000; }
-                .jq-activity-indicator.active { display: block; }
-                .jq-activity-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #1565c0 0%, #42a5f5 30%, #b3e5fc 50%, #42a5f5 70%, #1565c0 100%); background-size: 200% 100%; animation: jq-activity-bounce 2s ease-in-out infinite alternate; }
-                @keyframes jq-activity-bounce { 0% { background-position: 0% 0; } 100% { background-position: 100% 0; } }
+                .jq-json-output { background: none; color: #d4d4d4; }
+                .hljs-attr { color: #593CE2; }
+                .hljs-string { color: #66C147; }
+                .hljs-number { }
+                .hljs-null { opacity: 0.6; font-style: italic; }
+                .hljs-boolean { color: #46B4B2; font-style: italic; }
             </style>
         </head>
         <body>
             <div class="jq-activity-indicator" id="jq-activity-indicator">
                 <div class="jq-activity-bar"></div>
-            </div>
-            <div class="info-block">
-                <div class="jq-input-row"><span class="info-label">Input File:</span><span class="jq-input-file">${inputFileDisplay}</span><button class="jq-input-choose" id="jq-input-choose" title="Change input file">&#8230;</button></div>
-                ${optionsHtml}
             </div>
             ${previewContent}
             <script>
@@ -461,4 +474,154 @@ function getWorkspaceRelativePath(filePath: string): string {
     return filePath;
 }
 
-export function deactivate() { }
+
+// Parser-based JSON highlighter for jq output (handles sequences/fragments)
+function highlightJson(json: string): string {
+    let i = 0;
+    const len = json.length;
+    let out = '';
+    function span(cls: string, text: string) {
+        return `<span class="${cls}">${escapeHtml(text)}</span>`;
+    }
+    function skipWhitespace() {
+        while (i < len && /[\s\r\n]/.test(json[i])) out += json[i++];
+    }
+    function parseValue() {
+        skipWhitespace();
+        if (i >= len) return false;
+        const c = json[i];
+        if (c === '"') return parseString();
+        if (c === '-' || (c >= '0' && c <= '9')) return parseNumber();
+        if (c === 't' && json.substr(i, 4) === 'true') {
+            out += span('hljs-boolean', 'true'); i += 4; return true;
+        }
+        if (c === 'f' && json.substr(i, 5) === 'false') {
+            out += span('hljs-boolean', 'false'); i += 5; return true;
+        }
+        if (c === 'n' && json.substr(i, 4) === 'null') {
+            out += span('hljs-null', 'null'); i += 4; return true;
+        }
+        if (c === '{') return parseObject();
+        if (c === '[') return parseArray();
+        // Not valid JSON value, print as plain
+        out += escapeHtml(c); i++; return true;
+    }
+    function parseString() {
+        let start = i;
+        let s = '"';
+        i++;
+        while (i < len) {
+            const ch = json[i];
+            s += ch;
+            if (ch === '\\') {
+                if (i + 1 < len) {
+                    s += json[i + 1];
+                    i += 2;
+                    continue;
+                }
+            } else if (ch === '"') {
+                i++;
+                break;
+            }
+            i++;
+        }
+        out += span('hljs-string', s);
+        return true;
+    }
+    function parseNumber() {
+        let start = i;
+        let hasDot = false;
+        if (json[i] === '-') i++;
+        while (i < len && json[i] >= '0' && json[i] <= '9') i++;
+        if (i < len && json[i] === '.') {
+            hasDot = true; i++;
+            while (i < len && json[i] >= '0' && json[i] <= '9') i++;
+        }
+        if (i < len && (json[i] === 'e' || json[i] === 'E')) {
+            i++;
+            if (json[i] === '+' || json[i] === '-') i++;
+            while (i < len && json[i] >= '0' && json[i] <= '9') i++;
+        }
+        out += span('hljs-number', json.slice(start, i));
+        return true;
+    }
+    function parseObject() {
+        out += '{'; i++;
+        skipWhitespace();
+        let first = true;
+        while (i < len && json[i] !== '}') {
+            if (!first) {
+                if (json[i] === ',') { out += ','; i++; skipWhitespace(); }
+                else break;
+            }
+            first = false;
+            skipWhitespace();
+            if (json[i] === '"') {
+                // Key
+                let keyStart = i;
+                let s = '"';
+                i++;
+                while (i < len) {
+                    const ch = json[i];
+                    s += ch;
+                    if (ch === '\\') {
+                        if (i + 1 < len) {
+                            s += json[i + 1];
+                            i += 2;
+                            continue;
+                        }
+                    } else if (ch === '"') {
+                        i++;
+                        break;
+                    }
+                    i++;
+                }
+                out += span('hljs-attr', s);
+                skipWhitespace();
+                if (json[i] === ':') { out += ':'; i++; }
+                skipWhitespace();
+                parseValue();
+            } else {
+                // Not a valid key, print as plain
+                out += escapeHtml(json[i]); i++;
+            }
+            skipWhitespace();
+        }
+        if (i < len && json[i] === '}') { out += '}'; i++; }
+        return true;
+    }
+    function parseArray() {
+        out += '['; i++;
+        skipWhitespace();
+        let first = true;
+        while (i < len && json[i] !== ']') {
+            if (!first) {
+                if (json[i] === ',') { out += ','; i++; skipWhitespace(); }
+                else break;
+            }
+            first = false;
+            parseValue();
+            skipWhitespace();
+        }
+        if (i < len && json[i] === ']') { out += ']'; i++; }
+        return true;
+    }
+    // Main loop: handle sequences/fragments
+    let lastWasNewline = true;
+    while (i < len) {
+        skipWhitespace();
+        if (i >= len) break;
+        const before = out.length;
+        parseValue();
+        skipWhitespace();
+        // Only add a single newline between fragments, and only if not already at a newline
+        if (i < len && json[i] === '\n') {
+            out += '\n'; i++; lastWasNewline = true;
+        } else if (i < len && !/[\s\r\n]/.test(json[i])) {
+            if (!lastWasNewline && out.length > before) { out += '\n'; lastWasNewline = true; }
+        } else {
+            lastWasNewline = /\n$/.test(out);
+        }
+    }
+    return out;
+}
