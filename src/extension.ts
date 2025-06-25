@@ -65,13 +65,6 @@ class JqPreviewSession {
     ) {
         this.setupWatchers();
         this.setupPanelHandlers();
-
-        // TODO: Check if needed
-        this.panel.onDidChangeViewState(e => {
-            if (e.webviewPanel.active) {
-                this.updateWebview();
-            }
-        });
     }
 
     private setupWatchers() {
@@ -185,8 +178,18 @@ class JqPreviewSession {
                     this.updateWebview();
                 }
             } else if (msg.type === 'openResultDoc') {
-                const doc = await vscode.workspace.openTextDocument({ content: msg.content, language: 'json' });
-                vscode.window.showTextDocument(doc, vscode.ViewColumn.Active);
+                const isRaw = this.options.includes('-r');
+                const doc = await vscode.workspace.openTextDocument({
+                    content: msg.content,
+                    language: isRaw ? undefined : 'json'
+                });
+
+                // Open in the column to the left if any
+                let targetColumn = vscode.ViewColumn.Active;
+                if (this.panel.viewColumn && this.panel.viewColumn > 1) {
+                    targetColumn = this.panel.viewColumn - 1;
+                }
+                vscode.window.showTextDocument(doc, targetColumn);
             }
         });
         this.panel.onDidDispose(() => {
@@ -225,14 +228,14 @@ class JqPreviewSession {
 
         let copyIcon = `
             <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24"
-                preserveAspectRatio="xMidyMid meet" fill="currentColor">
+                preserveAspectRatio="xMidYMid meet" fill="currentColor">
                 <path d="M0 0h24v24H0V0z" fill="none" />
                 <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
             </svg>
         `;
         let openIcon = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="!00%" viewBox="0 0 24 24"
-                preserveAspectRatio="xMidyMid meet" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24"
+                preserveAspectRatio="xMidYMid meet" fill="currentColor">
                 <path d="M0 0h24v24H0V0z" fill="none" />
                 <path d="M13 11h-2v3H8v2h3v3h2v-3h3v-2h-3zm1-9H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z" />
             </svg>
@@ -245,10 +248,12 @@ class JqPreviewSession {
                     ${optionsHtml}
                 </div>
                 <div class="json-content">
+                    ${(this.previewState.type === PreviewType.Result) ? `
                     <div class="jq-result-actions" id="jq-result-actions">
                         <button class="jq-action-btn" id="jq-copy-btn" title="Copy to clipboard" aria-label="Copy">${copyIcon}</button>
                         <button class="jq-action-btn" id="jq-open-btn" title="Open in new document" aria-label="Open">${openIcon}</button>
                     </div>
+                    ` : ''}
                     <div class="${this.previewState.type} jq-result-pane" id="jq-result-pane">
                         ${highlightedContent}
                     </div>
@@ -315,32 +320,38 @@ class JqPreviewSession {
             </div>
             ${previewContent}
             <script>
+            const vscode = window.acquireVsCodeApi();
             document.getElementById('jq-input-choose').addEventListener('click', () => {
-                window.acquireVsCodeApi().postMessage({ type: 'chooseInput' });
+                vscode.postMessage({ type: 'chooseInput' });
             });
 
             // Show/hide result action buttons on hover using opacity changes
             const resultPane = document.getElementById('jq-result-pane');
             const actions = document.getElementById('jq-result-actions');
-            resultPane.addEventListener('mouseenter', () => { actions.classList.add('visible'); });
-            resultPane.addEventListener('mouseleave', () => {
-                actions.classList.remove('visible');
-                actions.classList.remove('opaque');
-            });
-            actions.addEventListener('mouseenter', () => { actions.classList.add('opaque'); });
-            actions.addEventListener('mouseleave', () => { actions.classList.remove('opaque'); });
+            if (actions) {
+                resultPane.addEventListener('mouseenter', () => { actions.classList.add('visible'); });
+                resultPane.addEventListener('mouseleave', () => {
+                    actions.classList.remove('visible');
+                    actions.classList.remove('opaque');
+                });
+                actions.addEventListener('mouseenter', () => { actions.classList.add('opaque'); });
+                actions.addEventListener('mouseleave', () => { actions.classList.remove('opaque'); });
 
-            // Use event delegation for action buttons
-            actions.addEventListener('click', (event) => {
-                const target = event.target.closest('button');
-                if (!target) return;
-                const text = resultPane.innerText;
-                if (target.id === 'jq-copy-btn') {
-                    navigator.clipboard.writeText(text);
-                } else if (target.id === 'jq-open-btn') {
-                    window.acquireVsCodeApi().postMessage({ type: 'openResultDoc', content: text });
-                }
-            });
+                // Use event delegation for action buttons
+                actions.addEventListener('click', (event) => {
+                    const target = event.target.closest('button');
+                    if (!target) return;
+                    event.preventDefault(); // Prevent default button behavior
+                    target.blur(); // Remove focus from button after click
+
+                    const text = resultPane.innerText;
+                    if (target.id === 'jq-copy-btn') {
+                        navigator.clipboard.writeText(text);
+                    } else if (target.id === 'jq-open-btn') {
+                        vscode.postMessage({ type: 'openResultDoc', content: text });
+                    }
+                });
+            }
 
             // Handle dropdown for options
             const dropdownBtn = document.getElementById('jq-dropdown-btn');
@@ -364,7 +375,7 @@ class JqPreviewSession {
                     } else {
                         selected.push(value);
                     }
-                    window.acquireVsCodeApi().postMessage({ type: 'setOptions', options: selected });
+                    vscode.postMessage({ type: 'setOptions', options: selected });
                     dropdownList.style.display = 'none';
                 });
             });
@@ -375,7 +386,7 @@ class JqPreviewSession {
                     let selected = Array.from(dropdownList.getElementsByClassName('jq-dropdown-item'))
                         .filter(i => i.classList.contains('selected') && i.getAttribute('data-value') !== value)
                         .map(i => i.getAttribute('data-value'));
-                    window.acquireVsCodeApi().postMessage({ type: 'setOptions', options: selected });
+                    vscode.postMessage({ type: 'setOptions', options: selected });
                     dropdownList.style.display = 'none';
                 });
             });
