@@ -41,6 +41,8 @@ export function activate(context: vscode.ExtensionContext) {
     }));
 }
 
+export function deactivate() { }
+
 class JqPreviewSession {
     private disposables: vscode.Disposable[] = [];
     private needUpdate = false;
@@ -175,6 +177,19 @@ class JqPreviewSession {
                     this.options = updateROption(newInput, this.options);
                     this.updateWebview();
                 }
+            } else if (msg.type === 'openResultDoc') {
+                const isRaw = this.options.includes('-r');
+                const doc = await vscode.workspace.openTextDocument({
+                    content: msg.content,
+                    language: isRaw ? undefined : 'json'
+                });
+
+                // Open in the column to the left if any
+                let targetColumn = vscode.ViewColumn.Active;
+                if (this.panel.viewColumn && this.panel.viewColumn > 1) {
+                    targetColumn = this.panel.viewColumn - 1;
+                }
+                vscode.window.showTextDocument(doc, targetColumn);
             }
         });
         this.panel.onDidDispose(() => {
@@ -199,18 +214,53 @@ class JqPreviewSession {
         if (!this.inputFile) {
             return '<p style="color: orange;">No input file selected.</p>';
         }
-        let inputFileDisplay = getWorkspaceRelativePath(this.inputFile);
+        const inputUri = vscode.Uri.file(this.inputFile);
+        const { name, description } = filenameDisplay(inputUri);
+        let inputFileDisplay = `<span class="jq-input-name">${escapeHtml(name)}</span><span class="jq-input-desc"> ${escapeHtml(description)}</span>`;
         const optionsHtml = renderOptionSelection(this.options);
+        const isRaw = this.options.includes('-r');
+        let highlightedContent = '';
+        if (!isRaw && this.previewState.type === PreviewType.Result) {
+            highlightedContent = `<pre class="jq-json-output">${highlightJson(this.previewState.content)}</pre>`;
+        } else {
+            highlightedContent = `<pre>${escapeHtml(this.previewState.content)}</pre>`;
+        }
+
+        let copyIcon = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24"
+                preserveAspectRatio="xMidYMid meet" fill="currentColor">
+                <path d="M0 0h24v24H0V0z" fill="none" />
+                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+            </svg>
+        `;
+        let openIcon = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24"
+                preserveAspectRatio="xMidYMid meet" fill="currentColor">
+                <path d="M0 0h24v24H0V0z" fill="none" />
+                <path d="M13 11h-2v3H8v2h3v3h2v-3h3v-2h-3zm1-9H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z" />
+            </svg>
+        `;
+
         let previewContent = `
             <div class="json-file">
-                <div class="json-file-header">${escapeHtml(path.basename(this.inputFile))}</div>
+                <div class="json-file-header">
+                    <div class="jq-input-row"><span class="info-label">Input File:</span><span class="jq-input-file">${inputFileDisplay}</span><button class="jq-input-choose" id="jq-input-choose" title="Change input file">&#8230;</button></div>
+                    ${optionsHtml}
+                </div>
                 <div class="json-content">
-                    <div class="${this.previewState.type}">
-                        <pre>${escapeHtml(this.previewState.content)}</pre>
+                    ${(this.previewState.type === PreviewType.Result) ? `
+                    <div class="jq-result-actions" id="jq-result-actions">
+                        <button class="jq-action-btn" id="jq-copy-btn" title="Copy to clipboard" aria-label="Copy">${copyIcon}</button>
+                        <button class="jq-action-btn" id="jq-open-btn" title="Open in new document" aria-label="Open">${openIcon}</button>
+                    </div>
+                    ` : ''}
+                    <div class="${this.previewState.type} jq-result-pane" id="jq-result-pane">
+                        ${highlightedContent}
                     </div>
                 </div>
             </div>
         `;
+
         return `<!DOCTYPE html>
         <html lang="en">
         <head>
@@ -218,11 +268,16 @@ class JqPreviewSession {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>jq Preview</title>
             <style>
-                body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background-color: var(--vscode-editor-background); padding: 16px; }
-                .info-block { background: var(--vscode-textBlockQuote-background); border-left: 4px solid var(--vscode-textBlockQuote-border); padding: 12px; margin-bottom: 16px; }
-                .info-label { font-weight: 500; margin-right: 0.5em; }
+                body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); padding: 8px; }
+                .jq-activity-indicator { display: none; position: fixed; left: 0; right: 0; top: 0; height: 2px; z-index: 1000; }
+                .jq-activity-indicator.active { display: block; }
+                .jq-activity-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #1565c0 0%, #42a5f5 30%, #b3e5fc 50%, #42a5f5 70%, #1565c0 100%); background-size: 200% 100%; animation: jq-activity-bounce 2s ease-in-out infinite alternate; }
+                @keyframes jq-activity-bounce { 0% { background-position: 0% 0; } 100% { background-position: 100% 0; } }
+                .info-label { font-weight: 500; margin-right: 0.5em; white-space: nowrap; }
                 .jq-input-row { display: flex; align-items: center; margin-bottom: 2px; }
                 .jq-input-file { margin-right: 0.5em; }
+                .jq-input-name { font-size: 1em; }
+                .jq-input-desc { font-size: 0.9em; opacity: 0.7; margin-left: 0.3em; }
                 .jq-input-choose { background: none; border: none; color: var(--vscode-button-foreground); font-size: 1em; cursor: pointer; margin-left: 0.2em; padding: 0 4px; border-radius: 3px; }
                 .jq-input-choose:hover { background: var(--vscode-button-hoverBackground); }
                 .jq-options-block { margin-top: 4px; }
@@ -237,31 +292,77 @@ class JqPreviewSession {
                 .jq-dropdown-item { padding: 6px 12px; cursor: pointer; }
                 .jq-dropdown-item.selected, .jq-dropdown-item:hover { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
                 .json-file { margin-bottom: 24px; border: 1px solid var(--vscode-panel-border); border-radius: 4px; overflow: hidden; }
-                .json-file-header { background-color: var(--vscode-editorGroupHeader-tabsBackground); padding: 8px 12px; font-weight: bold; border-bottom: 1px solid var(--vscode-panel-border); }
-                .json-content { padding: 12px; }
+                .json-file-header { background-color: var(--vscode-editorGroupHeader-tabsBackground); padding: 8px 12px; font-weight: normal; border-bottom: 1px solid var(--vscode-panel-border); }
+                .json-content { padding: 12px; position: relative; }
                 .error { color: var(--vscode-errorForeground); background-color: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); padding: 8px; border-radius: 4px; margin: 8px 0; }
                 .placeholder { color: var(--vscode-descriptionForeground); background: none; border: none; padding: 8px; border-radius: 4px; margin: 8px 0; font-style: italic; }
-                .result { background-color: var(--vscode-editor-background); border: 1px solid var(--vscode-input-border); padding: 12px; border-radius: 4px; overflow-x: auto; }
+                .result { border: 1px solid var(--vscode-input-border); border-radius: 4px; overflow-x: auto; }
                 pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
-                .jq-activity-indicator { display: none; position: fixed; left: 0; right: 0; top: 0; height: 2px; z-index: 1000; }
-                .jq-activity-indicator.active { display: block; }
-                .jq-activity-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #1565c0 0%, #42a5f5 30%, #b3e5fc 50%, #42a5f5 70%, #1565c0 100%); background-size: 200% 100%; animation: jq-activity-bounce 2s ease-in-out infinite alternate; }
-                @keyframes jq-activity-bounce { 0% { background-position: 0% 0; } 100% { background-position: 100% 0; } }
+                .jq-json-output { background: none; color: #d4d4d4; }
+                .hljs-attr { color: #593CE2; }
+                .hljs-string { color: #66C147; }
+                .hljs-number { }
+                .hljs-null { opacity: 0.6; font-style: italic; }
+                .hljs-boolean { color: #46B4B2; font-style: italic; }
+                .jq-result-actions { opacity: 0; transition: opacity 0.2s; position: absolute; top: 12px; right: 12px; z-index: 2; gap: 0; background: var(--vscode-editorWidget-background, #23272e); border: 1px solid var(--vscode-input-border); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; flex-direction: row; }
+                .jq-result-actions.visible { opacity: 0.3; }
+                .jq-result-actions.opaque { opacity: 1; }
+                .jq-action-btn { background: none; height: 32px; color: var(--vscode-foreground); border: none; border-radius: 0; padding: 6px; margin: 0; cursor: pointer; font-size: 1em; transition: background 0.2s, opacity 0.2s; outline: none; display: flex; align-items: center; }
+                .jq-action-btn:first-child { border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+                .jq-action-btn:last-child { border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+                .jq-action-btn:hover, .jq-action-btn:focus { background: var(--vscode-button-hoverBackground); opacity: 1; }
+                .jq-result-pane { position: relative; }
+                .jq-copied-tooltip { position: absolute; top: -28px; left: 50%; transform: translateX(-50%); background: var(--vscode-editorInfo-foreground, #4caf50); color: #fff; padding: 2px 10px; border-radius: 6px; font-size: 0.95em; pointer-events: none; opacity: 0.95; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,0.10); white-space: nowrap; }
             </style>
         </head>
         <body>
             <div class="jq-activity-indicator" id="jq-activity-indicator">
                 <div class="jq-activity-bar"></div>
             </div>
-            <div class="info-block">
-                <div class="jq-input-row"><span class="info-label">Input File:</span><span class="jq-input-file">${escapeHtml(inputFileDisplay)}</span><button class="jq-input-choose" id="jq-input-choose" title="Change input file">&#8230;</button></div>
-                ${optionsHtml}
-            </div>
             ${previewContent}
             <script>
+            const vscode = window.acquireVsCodeApi();
             document.getElementById('jq-input-choose').addEventListener('click', () => {
-                window.acquireVsCodeApi().postMessage({ type: 'chooseInput' });
+                vscode.postMessage({ type: 'chooseInput' });
             });
+
+            // Show/hide result action buttons on hover using opacity changes
+            const resultPane = document.getElementById('jq-result-pane');
+            const actions = document.getElementById('jq-result-actions');
+            if (actions) {
+                resultPane.addEventListener('mouseenter', () => { actions.classList.add('visible'); });
+                resultPane.addEventListener('mouseleave', () => {
+                    actions.classList.remove('visible');
+                    actions.classList.remove('opaque');
+                });
+                actions.addEventListener('mouseenter', () => { actions.classList.add('opaque'); });
+                actions.addEventListener('mouseleave', () => { actions.classList.remove('opaque'); });
+
+                // Use event delegation for action buttons
+                actions.addEventListener('click', (event) => {
+                    const target = event.target.closest('button');
+                    if (!target) return;
+                    event.preventDefault(); // Prevent default button behavior
+                    target.blur(); // Remove focus from button after click
+
+                    const text = resultPane.innerText;
+                    if (target.id === 'jq-copy-btn') {
+                        navigator.clipboard.writeText(text).then(() => {
+                            let tooltip = document.createElement('span');
+                            tooltip.className = 'jq-copied-tooltip';
+                            tooltip.textContent = 'Copied!';
+                            target.appendChild(tooltip);
+                            setTimeout(() => {
+                                if (tooltip.parentNode) tooltip.parentNode.removeChild(tooltip);
+                            }, 900);
+                        });
+                    } else if (target.id === 'jq-open-btn') {
+                        vscode.postMessage({ type: 'openResultDoc', content: text });
+                    }
+                });
+            }
+
+            // Handle dropdown for options
             const dropdownBtn = document.getElementById('jq-dropdown-btn');
             const dropdownList = document.getElementById('jq-dropdown-list');
             dropdownBtn.addEventListener('click', (e) => {
@@ -283,7 +384,7 @@ class JqPreviewSession {
                     } else {
                         selected.push(value);
                     }
-                    window.acquireVsCodeApi().postMessage({ type: 'setOptions', options: selected });
+                    vscode.postMessage({ type: 'setOptions', options: selected });
                     dropdownList.style.display = 'none';
                 });
             });
@@ -294,10 +395,12 @@ class JqPreviewSession {
                     let selected = Array.from(dropdownList.getElementsByClassName('jq-dropdown-item'))
                         .filter(i => i.classList.contains('selected') && i.getAttribute('data-value') !== value)
                         .map(i => i.getAttribute('data-value'));
-                    window.acquireVsCodeApi().postMessage({ type: 'setOptions', options: selected });
+                    vscode.postMessage({ type: 'setOptions', options: selected });
                     dropdownList.style.display = 'none';
                 });
             });
+
+            // Handle loading indicator
             window.addEventListener('message', event => {
                 const msg = event.data;
                 if (msg && msg.type === 'setLoading') {
@@ -317,7 +420,7 @@ class JqPreviewSession {
     }
 
     private async executeJq(jsonContent: string): Promise<string> {
-        // Artificial delay for testing: 20% chance
+        // Artificial delay for testing
         // if (Math.random() < 0.99) {
         //     await new Promise(res => setTimeout(res, 2000));
         // }
@@ -357,16 +460,45 @@ class JqPreviewSession {
     }
 }
 
-async function pickInputFile(): Promise<string | undefined> {
-    const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**', 100);
-    if (files.length === 0) {
-        vscode.window.showErrorMessage('No files found in workspace.');
-        return undefined;
+function filenameDisplay(uri: vscode.Uri): { name: string, description: string } {
+    const name = path.basename(uri.fsPath);
+    const wsFolders = vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) || [];
+    const wsFolder = wsFolders.find(ws => uri.fsPath.startsWith(ws + path.sep));
+    let description = '';
+    if (wsFolder) {
+        const rel = path.relative(wsFolder, uri.fsPath);
+        const dir = path.dirname(rel);
+        description = dir === '.' ? '' : dir;
+    } else {
+        description = path.dirname(uri.fsPath);
     }
-    const picked = await vscode.window.showQuickPick(files.map(f => ({ label: path.basename(f.fsPath), description: f.fsPath })), {
-        placeHolder: 'Select a file to use as input for this jq filter',
+    return { name, description };
+}
+
+async function pickInputFile(): Promise<string | undefined> {
+    const openDocs = vscode.workspace.textDocuments
+        .filter(doc => !doc.isUntitled && doc.uri.scheme === 'file')
+        .map(doc => doc.uri);
+    const workspaceFiles =
+        await vscode.workspace.findFiles('**/*', '**/node_modules/**', 1000);
+    const allUris = [...openDocs, ...workspaceFiles].filter((uri, idx, arr) =>
+        arr.findIndex(u => u.fsPath === uri.fsPath) === idx
+    );
+
+    const items = allUris.map(uri => {
+        const { name, description } = filenameDisplay(uri);
+        return {
+            label: name,
+            description,
+            uri
+        };
     });
-    return picked?.description;
+
+    const picked = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Select a file to use as input for this jq filter',
+        matchOnDescription: true
+    });
+    return picked?.uri.fsPath;
 }
 
 function renderOptionSelection(options: string[]): string {
@@ -385,7 +517,7 @@ function renderOptionSelection(options: string[]): string {
     return `
             <div class="jq-options-block">
                 <div class="jq-options-row-flex">
-                    <span class="jq-options-label">Filter&nbsp;Options:</span>
+                    <span class="jq-options-label">Filter Options:</span>
                     <span class="jq-chips-row-flex" id="jq-chips-row">${chipsHtml}<button id="jq-dropdown-btn" class="jq-dropdown-btn" title="Edit options">&#x25BC;</button></span>
                 </div>
                 <div id="jq-dropdown-list" class="jq-dropdown-list" style="display:none;">
@@ -427,4 +559,24 @@ function getWorkspaceRelativePath(filePath: string): string {
     return filePath;
 }
 
-export function deactivate() { }
+
+// Simpler regex-based JSON/jq fragment highlighter for jq output
+function highlightJson(json: string): string {
+    const stringRE = /"(?:\\.|[^"\\])*"/g;
+    const numberRE = /-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/g;
+    const booleanRE = /\b(?:true|false)\b/g;
+    const nullRE = /\bnull\b/g;
+    const keyRE = /("(?:\\.|[^"\\])*"\s*):/g;
+
+    function highlightLine(line: string): string {
+        line = line.replace(keyRE, (m, g1) => `<span class="hljs-attr">${escapeHtml(g1)}</span>:`);
+        line = line.replace(stringRE, m =>
+            /hljs-attr/.test(m) ? m : `<span class="hljs-string">${escapeHtml(m)}</span>`
+        );
+        line = line.replace(numberRE, m => `<span class="hljs-number">${m}</span>`);
+        line = line.replace(booleanRE, m => `<span class="hljs-boolean">${m}</span>`);
+        line = line.replace(nullRE, m => `<span class="hljs-null">${m}</span>`);
+        return line;
+    }
+    return json.split(/\r?\n/).map(highlightLine).join('\n');
+}
