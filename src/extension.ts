@@ -475,153 +475,23 @@ function getWorkspaceRelativePath(filePath: string): string {
 }
 
 
-// Parser-based JSON highlighter for jq output (handles sequences/fragments)
+// Simpler regex-based JSON/jq fragment highlighter for jq output
 function highlightJson(json: string): string {
-    let i = 0;
-    const len = json.length;
-    let out = '';
-    function span(cls: string, text: string) {
-        return `<span class="${cls}">${escapeHtml(text)}</span>`;
+    const stringRE = /"(?:\\.|[^"\\])*"/g;
+    const numberRE = /-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/g;
+    const booleanRE = /\b(?:true|false)\b/g;
+    const nullRE = /\bnull\b/g;
+    const keyRE = /("(?:\\.|[^"\\])*"\s*):/g;
+
+    function highlightLine(line: string): string {
+        line = line.replace(keyRE, (m, g1) => `<span class="hljs-attr">${escapeHtml(g1)}</span>:`);
+        line = line.replace(stringRE, m =>
+            /hljs-attr/.test(m) ? m : `<span class="hljs-string">${escapeHtml(m)}</span>`
+        );
+        line = line.replace(numberRE, m => `<span class="hljs-number">${m}</span>`);
+        line = line.replace(booleanRE, m => `<span class="hljs-boolean">${m}</span>`);
+        line = line.replace(nullRE, m => `<span class="hljs-null">${m}</span>`);
+        return line;
     }
-    function skipWhitespace() {
-        while (i < len && /[\s\r\n]/.test(json[i])) out += json[i++];
-    }
-    function parseValue() {
-        skipWhitespace();
-        if (i >= len) return false;
-        const c = json[i];
-        if (c === '"') return parseString();
-        if (c === '-' || (c >= '0' && c <= '9')) return parseNumber();
-        if (c === 't' && json.substr(i, 4) === 'true') {
-            out += span('hljs-boolean', 'true'); i += 4; return true;
-        }
-        if (c === 'f' && json.substr(i, 5) === 'false') {
-            out += span('hljs-boolean', 'false'); i += 5; return true;
-        }
-        if (c === 'n' && json.substr(i, 4) === 'null') {
-            out += span('hljs-null', 'null'); i += 4; return true;
-        }
-        if (c === '{') return parseObject();
-        if (c === '[') return parseArray();
-        // Not valid JSON value, print as plain
-        out += escapeHtml(c); i++; return true;
-    }
-    function parseString() {
-        let start = i;
-        let s = '"';
-        i++;
-        while (i < len) {
-            const ch = json[i];
-            s += ch;
-            if (ch === '\\') {
-                if (i + 1 < len) {
-                    s += json[i + 1];
-                    i += 2;
-                    continue;
-                }
-            } else if (ch === '"') {
-                i++;
-                break;
-            }
-            i++;
-        }
-        out += span('hljs-string', s);
-        return true;
-    }
-    function parseNumber() {
-        let start = i;
-        let hasDot = false;
-        if (json[i] === '-') i++;
-        while (i < len && json[i] >= '0' && json[i] <= '9') i++;
-        if (i < len && json[i] === '.') {
-            hasDot = true; i++;
-            while (i < len && json[i] >= '0' && json[i] <= '9') i++;
-        }
-        if (i < len && (json[i] === 'e' || json[i] === 'E')) {
-            i++;
-            if (json[i] === '+' || json[i] === '-') i++;
-            while (i < len && json[i] >= '0' && json[i] <= '9') i++;
-        }
-        out += span('hljs-number', json.slice(start, i));
-        return true;
-    }
-    function parseObject() {
-        out += '{'; i++;
-        skipWhitespace();
-        let first = true;
-        while (i < len && json[i] !== '}') {
-            if (!first) {
-                if (json[i] === ',') { out += ','; i++; skipWhitespace(); }
-                else break;
-            }
-            first = false;
-            skipWhitespace();
-            if (json[i] === '"') {
-                // Key
-                let keyStart = i;
-                let s = '"';
-                i++;
-                while (i < len) {
-                    const ch = json[i];
-                    s += ch;
-                    if (ch === '\\') {
-                        if (i + 1 < len) {
-                            s += json[i + 1];
-                            i += 2;
-                            continue;
-                        }
-                    } else if (ch === '"') {
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
-                out += span('hljs-attr', s);
-                skipWhitespace();
-                if (json[i] === ':') { out += ':'; i++; }
-                skipWhitespace();
-                parseValue();
-            } else {
-                // Not a valid key, print as plain
-                out += escapeHtml(json[i]); i++;
-            }
-            skipWhitespace();
-        }
-        if (i < len && json[i] === '}') { out += '}'; i++; }
-        return true;
-    }
-    function parseArray() {
-        out += '['; i++;
-        skipWhitespace();
-        let first = true;
-        while (i < len && json[i] !== ']') {
-            if (!first) {
-                if (json[i] === ',') { out += ','; i++; skipWhitespace(); }
-                else break;
-            }
-            first = false;
-            parseValue();
-            skipWhitespace();
-        }
-        if (i < len && json[i] === ']') { out += ']'; i++; }
-        return true;
-    }
-    // Main loop: handle sequences/fragments
-    let lastWasNewline = true;
-    while (i < len) {
-        skipWhitespace();
-        if (i >= len) break;
-        const before = out.length;
-        parseValue();
-        skipWhitespace();
-        // Only add a single newline between fragments, and only if not already at a newline
-        if (i < len && json[i] === '\n') {
-            out += '\n'; i++; lastWasNewline = true;
-        } else if (i < len && !/[\s\r\n]/.test(json[i])) {
-            if (!lastWasNewline && out.length > before) { out += '\n'; lastWasNewline = true; }
-        } else {
-            lastWasNewline = /\n$/.test(out);
-        }
-    }
-    return out;
+    return json.split(/\r?\n/).map(highlightLine).join('\n');
 }
