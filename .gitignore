@@ -1,7 +1,5 @@
-out
+build
 node_modules
-.vscode-test
-*.vsix
-*.vsix*
 samples/private
 secrets
+*.vsix
