@@ -5,6 +5,7 @@ content/vscode-preview.png
 node_modules/**
 out/test/**
 samples/**
+secrets/**
 src/**
 .gitignore
 vsc-extension-quickstart.md
