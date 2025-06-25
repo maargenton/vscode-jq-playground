@@ -312,6 +312,7 @@ class JqPreviewSession {
                 .jq-action-btn:last-child { border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
                 .jq-action-btn:hover, .jq-action-btn:focus { background: var(--vscode-button-hoverBackground); opacity: 1; }
                 .jq-result-pane { position: relative; }
+                .jq-copied-tooltip { position: absolute; top: -28px; left: 50%; transform: translateX(-50%); background: var(--vscode-editorInfo-foreground, #4caf50); color: #fff; padding: 2px 10px; border-radius: 6px; font-size: 0.95em; pointer-events: none; opacity: 0.95; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,0.10); white-space: nowrap; }
             </style>
         </head>
         <body>
@@ -346,7 +347,15 @@ class JqPreviewSession {
 
                     const text = resultPane.innerText;
                     if (target.id === 'jq-copy-btn') {
-                        navigator.clipboard.writeText(text);
+                        navigator.clipboard.writeText(text).then(() => {
+                            let tooltip = document.createElement('span');
+                            tooltip.className = 'jq-copied-tooltip';
+                            tooltip.textContent = 'Copied!';
+                            target.appendChild(tooltip);
+                            setTimeout(() => {
+                                if (tooltip.parentNode) tooltip.parentNode.removeChild(tooltip);
+                            }, 900);
+                        });
                     } else if (target.id === 'jq-open-btn') {
                         vscode.postMessage({ type: 'openResultDoc', content: text });
                     }
@@ -411,7 +420,7 @@ class JqPreviewSession {
     }
 
     private async executeJq(jsonContent: string): Promise<string> {
-        // Artificial delay for testing: 20% chance
+        // Artificial delay for testing
         // if (Math.random() < 0.99) {
         //     await new Promise(res => setTimeout(res, 2000));
         // }
