@@ -3,6 +3,12 @@
 All notable changes to the "VSCode jq Playground" extension will be documented
 in this file.
 
+## [0.2.1] - 2025-06-24
+
+- Update activity indicator
+- Update icon with matching design files
+- Cleanup project layout
+
 
 ## [0.2.0] - 2025-06-24
 

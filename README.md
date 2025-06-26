@@ -6,7 +6,7 @@ results of applying your jq filter to a selected file in your workspace. It is
 designed to mimic the streamlined experience of the official jq Playground
 web application, but directly within VS Code.
 
-![Preview](content/vscode-preview.png)
+![Preview](docs/images/vscode-preview.png)
 
 ## Features
 

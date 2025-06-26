@@ -2,7 +2,7 @@
     "name": "jq-playground",
     "displayName": "jq Playground",
     "description": "Live preview of jq filter output",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "publisher": "maargenton",
     "repository": {
         "type": "git",
@@ -22,11 +22,11 @@
     "categories": [
         "Other"
     ],
-    "icon": "content/icon-128c.png",
+    "icon": "content/icon-128.png",
     "activationEvents": [
         "onLanguage:jq"
     ],
-    "main": "./out/extension.js",
+    "main": "build/js/extension.js",
     "contributes": {
         "commands": [
             {
@@ -54,7 +54,7 @@
                 "extensions": [
                     ".jq"
                 ],
-                "configuration": "./language-configuration.json"
+                "configuration": "content/language-configuration.json"
             }
         ]
     },
@@ -62,8 +62,9 @@
         "vscode:prepublish": "npm run compile",
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
-        "bundle": "npx vsce package",
-        "install": "npx vsce package && code --install-extension $(ls *.vsix | sort | tail -n 1)"
+        "prebundle": "find . -name .DS_Store -delete",
+        "bundle": "npm run prebundle && npx vsce package -o build",
+        "install": "npm run bundle && code --install-extension $(ls build/*.vsix | sort | tail -n 1)"
     },
     "devDependencies": {
         "@types/vscode": "^1.74.0",
