@@ -269,10 +269,28 @@ class JqPreviewSession {
             <title>jq Preview</title>
             <style>
                 body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); padding: 8px; }
-                .jq-activity-indicator { display: none; position: fixed; left: 0; right: 0; top: 0; height: 2px; z-index: 1000; }
-                .jq-activity-indicator.active { display: block; }
-                .jq-activity-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #1565c0 0%, #42a5f5 30%, #b3e5fc 50%, #42a5f5 70%, #1565c0 100%); background-size: 200% 100%; animation: jq-activity-bounce 2s ease-in-out infinite alternate; }
-                @keyframes jq-activity-bounce { 0% { background-position: 0% 0; } 100% { background-position: 100% 0; } }
+                .jq-activity-indicator {
+                    display: none; position: fixed; left: 0; right: 0; top: 0; height: 2px; z-index: 1000;
+                    background: transparent; overflow: hidden; opacity: 0; transition: opacity 0.2s;
+                }
+                .jq-activity-indicator.active { display: block; opacity: 1; }
+                .jq-activity-bar-track {
+                    position: absolute; left: 0; top: 0; height: 100%; width: calc(100% + 160px);
+                    will-change: transform; display: flex;
+                }
+                .jq-activity-bar {
+                    position: absolute; top: 0; width: 160px; height: 100%;
+                    background: linear-gradient(90deg, transparent 0%, #7195EA 70%, transparent 100%);
+                }
+                .jq-activity-bar:first-child { left: 0; }
+                .jq-activity-bar:last-child { left: calc(100% - 160px); }
+                @keyframes jq-activity-bar-move {
+                    0% { transform: translateX(calc(160px - 100%)); }
+                    100% { transform: translateX(0%); }
+                }
+                .jq-activity-indicator.active .jq-activity-bar-track {
+                    animation: jq-activity-bar-move 1.2s linear infinite;
+                }
                 .info-label { font-weight: 500; margin-right: 0.5em; white-space: nowrap; }
                 .jq-input-row { display: flex; align-items: center; margin-bottom: 2px; }
                 .jq-input-file { margin-right: 0.5em; }
@@ -317,7 +335,10 @@ class JqPreviewSession {
         </head>
         <body>
             <div class="jq-activity-indicator" id="jq-activity-indicator">
-                <div class="jq-activity-bar"></div>
+                <div class="jq-activity-bar-track">
+                    <div class="jq-activity-bar"></div>
+                    <div class="jq-activity-bar"></div>
+                </div>
             </div>
             ${previewContent}
             <script>
