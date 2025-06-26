@@ -272,20 +272,21 @@ class JqPreviewSession {
                 .jq-activity-indicator {
                     display: none; position: fixed; left: 0; right: 0; top: 0; height: 2px; z-index: 1000;
                     background: transparent; overflow: hidden; opacity: 0; transition: opacity 0.2s;
+                    --jq-activity-bar-width: 160px;
                 }
                 .jq-activity-indicator.active { display: block; opacity: 1; }
                 .jq-activity-bar-track {
-                    position: absolute; left: 0; top: 0; height: 100%; width: calc(100% + 160px);
+                    position: absolute; left: 0; top: 0; height: 100%; width: calc(100% +  var(--jq-activity-bar-width));
                     will-change: transform; display: flex;
                 }
                 .jq-activity-bar {
-                    position: absolute; top: 0; width: 160px; height: 100%;
+                    position: absolute; top: 0; width:  var(--jq-activity-bar-width); height: 100%;
                     background: linear-gradient(90deg, transparent 0%, #7195EA 70%, transparent 100%);
                 }
                 .jq-activity-bar:first-child { left: 0; }
-                .jq-activity-bar:last-child { left: calc(100% - 160px); }
+                .jq-activity-bar:last-child { left: calc(100% -  var(--jq-activity-bar-width)); }
                 @keyframes jq-activity-bar-move {
-                    0% { transform: translateX(calc(160px - 100%)); }
+                    0% { transform: translateX(calc( var(--jq-activity-bar-width) - 100%)); }
                     100% { transform: translateX(0%); }
                 }
                 .jq-activity-indicator.active .jq-activity-bar-track {
