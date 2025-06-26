@@ -22,7 +22,7 @@
     "categories": [
         "Other"
     ],
-    "icon": "content/icon-128c.png",
+    "icon": "content/icon-128.png",
     "activationEvents": [
         "onLanguage:jq"
     ],
