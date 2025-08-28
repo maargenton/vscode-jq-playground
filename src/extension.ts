@@ -1,12 +1,14 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
 import { promisify } from 'util';
 import * as os from 'os';
 import * as crypto from 'crypto';
 
-const execAsync = promisify(exec);
+const writeFileAsync = promisify(fs.writeFile);
+const readFileAsync = promisify(fs.readFile);
+const unlinkAsync = promisify(fs.unlink);
 
 enum PreviewType {
     Placeholder = 'placeholder',
@@ -111,7 +113,7 @@ class JqPreviewSession {
                     if (openDoc) {
                         jsonContent = openDoc.getText();
                     } else {
-                        jsonContent = fs.readFileSync(this.inputFile, 'utf8');
+                        jsonContent = await readFileAsync(this.inputFile, 'utf8');
                     }
                     output = await this.executeJq(jsonContent);
                     isError = false;
@@ -450,14 +452,15 @@ class JqPreviewSession {
         const tmpDir = os.tmpdir();
         const tmpFile = path.join(tmpDir, `jq-playground-${crypto.randomBytes(8).toString('hex')}.json`);
         const tmpFilter = path.join(tmpDir, `jq-playground-filter-${crypto.randomBytes(8).toString('hex')}.jq`);
+
         try {
-            fs.writeFileSync(tmpFile, jsonContent, 'utf8');
-            fs.writeFileSync(tmpFilter, this.activeEditor.document.getText(), 'utf8');
-            const opts = this.options.join(' ');
-            const { stdout } = await execAsync(`jq ${opts} -f '${tmpFilter}' '${tmpFile}' 2>&1`);
-            return stdout.trim();
+            await writeFileAsync(tmpFile, jsonContent, 'utf8');
+            await writeFileAsync(tmpFilter, this.activeEditor.document.getText(), 'utf8');
+
+            const args = [...this.options, '-f', tmpFilter, tmpFile];
+            return await this.invokeJq(args);
         } catch (error: any) {
-            let errMsg = error.stdout || error.stderr || error.message || String(error);
+            let errMsg = error.message || String(error);
             let jsonDisplay = getWorkspaceRelativePath(this.inputFile);
             let filterDisplay = getWorkspaceRelativePath(this.activeEditor.document.fileName);
             if (jsonDisplay) {
@@ -466,14 +469,38 @@ class JqPreviewSession {
             if (filterDisplay) {
                 errMsg = errMsg.replaceAll(tmpFilter, filterDisplay);
             }
-            if (errMsg.includes('command not found')) {
-                errMsg = 'jq command not found. Please install jq on your system: https://jqlang.org/download/';
-            }
             throw new Error(errMsg);
         } finally {
-            try { fs.unlinkSync(tmpFile); } catch { }
-            try { fs.unlinkSync(tmpFilter); } catch { }
+            try { await unlinkAsync(tmpFile); } catch { }
+            try { await unlinkAsync(tmpFilter); } catch { }
         }
+    }
+
+    private async invokeJq(args: string[]): Promise<string> {
+        return new Promise<string>((resolve, reject) => {
+            const jq = spawn('jq', args, { shell: false });
+
+            let stdout = '';
+            let stderr = '';
+            jq.stdout.on('data', (data) => { stdout += data.toString(); });
+            jq.stderr.on('data', (data) => { stderr += data.toString(); });
+
+            jq.on('close', (code) => {
+                if (code === 0) {
+                    resolve(stdout.trim());
+                } else {
+                    reject(new Error(stderr || stdout));
+                }
+            });
+
+            jq.on('error', (error) => {
+                if (error.message.includes('ENOENT') || error.message.includes('command not found')) {
+                    reject(new Error('jq command not found. Please install jq on your system: https://jqlang.org/download/'));
+                } else {
+                    reject(new Error(error.message));
+                }
+            });
+        });
     }
 
     public dispose() {
