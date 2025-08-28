@@ -303,9 +303,9 @@ class JqPreviewSession {
                 .jq-options-row-flex { display: flex; align-items: flex-start; }
                 .jq-options-label { font-weight: 500; margin-right: 0.5em; white-space: nowrap; }
                 .jq-chips-row-flex { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; flex: 1 1 0%; min-width: 0; }
-                .jq-chip { display: inline-flex; align-items: center; background: var(--vscode-button-secondaryBackground, #2a2d2e); color: var(--vscode-button-secondaryForeground, #fff); border-radius: 16px; padding: 2px 10px; font-size: 90%; margin-right: 2px; margin-bottom: 2px; }
-                .jq-chip-x { margin-left: 6px; cursor: pointer; font-weight: bold; color: var(--vscode-button-secondaryForeground, #fff); }
-                .jq-chip-x:hover { color: var(--vscode-errorForeground); }
+                .jq-chip { display: inline-flex; background: var(--vscode-button-secondaryBackground, #2a2d2e); color: var(--vscode-button-secondaryForeground, #fff); border-radius: 16px; padding: 2px 5px; font-size: 90%; margin-right: 2px; margin-bottom: 2px; }
+                .jq-chip-x { margin-left: 6px; cursor: pointer; color: var(--vscode-button-secondaryForeground, #fff); opacity: 0.8; }
+                .jq-chip-x:hover { color: var(--vscode-editorHoverWidget-highlightForeground); opacity: 1; }
                 .jq-dropdown-btn { background: none; border: none; color: var(--vscode-foreground); font-size: 1em; margin-left: 4px; cursor: pointer; }
                 .jq-dropdown-list { position: absolute; z-index: 10; background: var(--vscode-editorWidget-background); color: var(--vscode-editorWidget-foreground); border: 1px solid var(--vscode-input-border); border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); margin-top: 2px; min-width: 220px; }
                 .jq-dropdown-item { padding: 6px 12px; cursor: pointer; }
@@ -534,7 +534,7 @@ function renderOptionSelection(options: string[]): string {
     ];
     const selectedOptions = allOptions.filter(opt => options.includes(opt.value));
     const chipsHtml = selectedOptions.length
-        ? selectedOptions.map(opt => `<span class="jq-chip" data-value="${opt.value}">${opt.label}<span class="jq-chip-x" data-value="${opt.value}">&times;</span></span>`).join(' ')
+        ? selectedOptions.map(opt => `<span class="jq-chip" data-value="${opt.value}">${opt.label}<span class="jq-chip-x" data-value="${opt.value}">ⓧ</span></span>`).join(' ')
         : '<span style="opacity:0.6;">(none)</span>';
     return `
             <div class="jq-options-block">
