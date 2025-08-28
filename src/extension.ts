@@ -489,12 +489,12 @@ class JqPreviewSession {
                 if (code === 0) {
                     resolve(stdout.trim());
                 } else {
-                    reject(new Error(stderr || stdout));
+                    reject(new Error(stderr || stdout || 'Unknown jq error'));
                 }
             });
 
             jq.on('error', (error) => {
-                if (error.message.includes('ENOENT') || error.message.includes('command not found')) {
+                if (error.message.includes('ENOENT')) {
                     reject(new Error('jq command not found. Please install jq on your system: https://jqlang.org/download/'));
                 } else {
                     reject(new Error(error.message));
