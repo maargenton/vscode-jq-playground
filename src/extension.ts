@@ -589,10 +589,9 @@ function escapeHtml(text: string): string {
         '&': '&amp;',
         '<': '&lt;',
         '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;'
+        '"': '&quot;'
     };
-    return text.replace(/[&<>"']/g, (m) => map[m]);
+    return text.replace(/[&<>"]/g, (m) => map[m]);
 }
 
 function getWorkspaceRelativePath(filePath: string): string {
