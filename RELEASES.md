@@ -1,3 +1,17 @@
+## 0.2.3
+
+- Fix HTML escaping for jq output highlighting to exclude quotes and apostrophes
+
+### Code changes
+
+- Fix escapeHtml() quotes and apostrophes escaping - #9 ([#9](https://github.com/maargenton/vscode-jq-playground/pull/9))
+
+
+### Related issues
+
+- `&#039;` is added in place of single-quote (') in formatted output ([#8](https://github.com/maargenton/vscode-jq-playground/issues/8))
+
+
 ## 0.2.2
 
 - Improve cross-platform compatibility / Windows support
