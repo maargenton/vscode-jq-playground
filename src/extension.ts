@@ -588,9 +588,10 @@ function escapeHtml(text: string): string {
     const map: { [key: string]: string } = {
         '&': '&amp;',
         '<': '&lt;',
-        '>': '&gt;'
+        '>': '&gt;',
+        '"': '&quot;'
     };
-    return text.replace(/[&<>]/g, (m) => map[m]);
+    return text.replace(/[&<>"]/g, (m) => map[m]);
 }
 
 function getWorkspaceRelativePath(filePath: string): string {
